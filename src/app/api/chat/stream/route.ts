@@ -35,7 +35,8 @@ export async function POST(req: NextRequest) {
       let targetModel = model || "gpt-4o-mini";
 
       if (provider === "gemini") {
-        endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+        // 全面相容 Google AI Studio 新版 AQ.Ab8 與舊版 AIzaSy 金鑰格式
+        endpoint = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${encodeURIComponent(currentKey)}`;
         targetModel = model || "gemini-2.0-flash";
       } else if (provider === "openrouter") {
         endpoint = "https://openrouter.ai/api/v1/chat/completions";
@@ -47,7 +48,9 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${currentKey}`,
       };
 
-      if (provider === "openrouter") {
+      if (provider === "gemini") {
+        headers["x-goog-api-key"] = currentKey;
+      } else if (provider === "openrouter") {
         headers["HTTP-Referer"] = "https://attachment-pwa.vercel.app";
         headers["X-Title"] = "Attachment PWA";
       }
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: { message: `API 連線頻率限制或額度上限 (${lastStatus})。請稍微等待 10~20 秒重試，或確認兩組 Key 是否來自不同的 Google 帳號。` } },
+      { error: { message: `API 連線失敗 (${lastStatus}): ${lastErrorText}` } },
       { status: lastStatus }
     );
   } catch (err: any) {
