@@ -28,39 +28,41 @@ export async function POST(req: NextRequest) {
     let lastErrorText = "";
     let lastStatus = 500;
 
-    // 🔄 多 Key 自動輪播與 429 冷卻自動切換重試機制
+    // 定義 Gemini 模型自動降級切換鏈 (2.0-flash -> 1.5-flash -> 2.0-flash-lite)
+    const geminiModels = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+
+    // 🔄 多 Key 輪播與多模型降級備援機制 (Key Rotation + Model Fallback)
     for (let i = 0; i < keys.length; i++) {
       const currentKey = keys[i];
-      let endpoint = "https://api.openai.com/v1/chat/completions";
-      let targetModel = model || "gpt-4o-mini";
 
-      if (provider === "gemini") {
-        // 全面相容 Google AI Studio 新版 AQ.Ab8 與舊版 AIzaSy 金鑰格式
-        endpoint = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${encodeURIComponent(currentKey)}`;
-        targetModel = model || "gemini-2.0-flash";
-      } else if (provider === "openrouter") {
-        endpoint = "https://openrouter.ai/api/v1/chat/completions";
-        targetModel = model || "openai/gpt-4o-mini";
-      }
+      const modelsToTry = provider === "gemini" ? geminiModels : [model || "gpt-4o-mini"];
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${currentKey}`,
-      };
+      for (const currentModel of modelsToTry) {
+        let endpoint = "https://api.openai.com/v1/chat/completions";
 
-      if (provider === "gemini") {
-        headers["x-goog-api-key"] = currentKey;
-      } else if (provider === "openrouter") {
-        headers["HTTP-Referer"] = "https://attachment-pwa.vercel.app";
-        headers["X-Title"] = "Attachment PWA";
-      }
+        if (provider === "gemini") {
+          endpoint = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${encodeURIComponent(currentKey)}`;
+        } else if (provider === "openrouter") {
+          endpoint = "https://openrouter.ai/api/v1/chat/completions";
+        }
 
-      for (let retry = 0; retry < 2; retry++) {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentKey}`,
+        };
+
+        if (provider === "gemini") {
+          headers["x-goog-api-key"] = currentKey;
+        } else if (provider === "openrouter") {
+          headers["HTTP-Referer"] = "https://attachment-pwa.vercel.app";
+          headers["X-Title"] = "Attachment PWA";
+        }
+
         const response = await fetch(endpoint, {
           method: "POST",
           headers,
           body: JSON.stringify({
-            model: targetModel,
+            model: currentModel,
             messages: payloadMessages,
             temperature: temperature ?? 0.9,
             stream: true,
@@ -81,24 +83,20 @@ export async function POST(req: NextRequest) {
         lastStatus = response.status;
         lastErrorText = await response.text();
 
-        // 若遇 429 且還有下一組 Key，立即無感切換至下一組 Key
-        if (response.status === 429 && i < keys.length - 1) {
-          console.warn(`[AutoKeyRotation] Key #${i + 1} 觸發頻率限制 (429)。自動切換至 Key #${i + 2}...`);
-          break;
-        }
-
-        // 若無下一組 Key 且遇 429，自動在背景冷卻 3 秒重試
-        if (response.status === 429 && retry === 0) {
-          console.warn(`[AutoRetry] 觸發頻率限制 (429)，自動冷卻 3 秒後重試...`);
-          await new Promise((res) => setTimeout(res, 3000));
-        } else {
-          break;
+        // 若遇到 429 (Resource Exhausted)，嘗試下一個模型或下一組 Key
+        if (response.status === 429) {
+          console.warn(`[AutoFallback] 模型 ${currentModel} 觸發 429 限流。嘗試自動備援切換...`);
+          continue; // 嘗試列表中的下一個模型
         }
       }
     }
 
     return NextResponse.json(
-      { error: { message: `API 連線失敗 (${lastStatus}): ${lastErrorText}` } },
+      {
+        error: {
+          message: `Google Gemini 免費額度暫時冷卻中 (429)。系統已為您嘗試所有備援 Key 與模型。請等待約 20~30 秒，或至【設定】將服務商切換為 OpenRouter。`,
+        },
+      },
       { status: lastStatus }
     );
   } catch (err: any) {
