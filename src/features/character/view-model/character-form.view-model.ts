@@ -7,16 +7,19 @@ export function useCharacterFormViewModel() {
   const createCharacterUseCase = new CreateCharacterUseCase();
 
   const [name, setName] = useState<string>("");
+  const [avatar, setAvatar] = useState<string>("avatar_default");
+  const [age, setAge] = useState<string>("28");
   const [gender, setGender] = useState<string>("男");
-  const [age, setAge] = useState<number>(28);
   const [occupation, setOccupation] = useState<string>("");
-  const [traits, setTraits] = useState<string>("冷靜, 理性, 溫柔");
-  const [speechStyle, setSpeechStyle] = useState<string>("語氣平穩, 用字簡潔");
-  const [experience, setExperience] = useState<string>("");
-  const [openingLocation, setOpeningLocation] = useState<string>("咖啡廳");
-  const [openingDesc, setOpeningDesc] = useState<string>("午後的陽光灑在窗前，對方靜靜地看著你。");
-  const [firstMessage, setFirstMessage] = useState<string>("(他放下手中的杯子，抬頭看向你。)\n\n「你來了，請坐。」");
+
+  const [personality, setPersonality] = useState<string>("");
+  const [speechStyle, setSpeechStyle] = useState<string>("");
+  const [background, setBackground] = useState<string>("");
+  const [worldView, setWorldView] = useState<string>("");
+  const [fixedHeader, setFixedHeader] = useState<string>("");
+
   const [systemPrompt, setSystemPrompt] = useState<string>("請始終維持角色設定，不得跳脫角色，不得控制玩家。");
+  const [openingScene, setOpeningScene] = useState<string>("(他沉默看著你。)\n\n「你來了。」");
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -31,32 +34,17 @@ export function useCharacterFormViewModel() {
     try {
       await createCharacterUseCase.execute({
         name: name.trim(),
-        basic: {
-          age: Number(age),
-          gender: gender.trim(),
-          occupation: occupation.trim(),
-        },
-        personality: {
-          traits: traits.split(",").map((s) => s.trim()).filter(Boolean),
-          speechStyle: speechStyle.split(",").map((s) => s.trim()).filter(Boolean),
-        },
-        background: {
-          experience: experience.trim(),
-        },
-        world: {
-          era: "現代",
-          location: openingLocation.trim(),
-        },
-        openingScene: {
-          location: openingLocation.trim(),
-          description: openingDesc.trim(),
-          firstMessage: firstMessage.trim(),
-        },
-        prompt: {
-          systemPrompt: systemPrompt.trim(),
-          characterPrompt: `${traits}，${speechStyle}`,
-          rules: ["不得跳脫角色", "不得控制玩家"],
-        },
+        avatar: avatar.trim(),
+        age: age.trim(),
+        gender: gender.trim(),
+        occupation: occupation.trim(),
+        personality: personality.trim(),
+        speechStyle: speechStyle.trim(),
+        background: background.trim(),
+        worldView: worldView.trim(),
+        fixedHeader: fixedHeader.trim(),
+        systemPrompt: systemPrompt.trim(),
+        openingScene: openingScene.trim(),
       });
 
       router.push("/");
@@ -71,26 +59,28 @@ export function useCharacterFormViewModel() {
   return {
     name,
     setName,
-    gender,
-    setGender,
+    avatar,
+    setAvatar,
     age,
     setAge,
+    gender,
+    setGender,
     occupation,
     setOccupation,
-    traits,
-    setTraits,
+    personality,
+    setPersonality,
     speechStyle,
     setSpeechStyle,
-    experience,
-    setExperience,
-    openingLocation,
-    setOpeningLocation,
-    openingDesc,
-    setOpeningDesc,
-    firstMessage,
-    setFirstMessage,
+    background,
+    setBackground,
+    worldView,
+    setWorldView,
+    fixedHeader,
+    setFixedHeader,
     systemPrompt,
     setSystemPrompt,
+    openingScene,
+    setOpeningScene,
     isSubmitting,
     handleSubmit,
   };

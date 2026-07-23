@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useCharacterFormViewModel } from "@/features/character/view-model/character-form.view-model";
-import { ArrowLeft, UserPlus, Sparkles, MessageSquare, ShieldAlert } from "lucide-react";
+import { ArrowLeft, UserPlus, Sparkles, MessageSquare, BookOpen, ScrollText, Building, Key } from "lucide-react";
 
 export default function NewCharacterPage() {
   const router = useRouter();
@@ -22,35 +22,35 @@ export default function NewCharacterPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-indigo-400" />
-            建立全新角色
+            建立 13 維度角色靈魂
           </h1>
-          <p className="text-xs text-slate-400">自訂角色基本設定、性格特質與第一幕台詞</p>
+          <p className="text-xs text-slate-400">定義角色的性格、背景、說話風格與固定場景環境</p>
         </div>
       </header>
 
       <form onSubmit={vm.handleSubmit} className="space-y-5">
-        {/* 基本資訊 */}
+        {/* 基本檔案 (1-6) */}
         <div className="glass-panel p-4 rounded-2xl space-y-3">
           <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-purple-400" />
-            基本檔案
+            基本檔案 (Identity)
           </h2>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">角色名稱 *</label>
+              <label className="block text-xs text-slate-400 mb-1">角色名稱 (name) *</label>
               <input
                 type="text"
                 value={vm.name}
                 onChange={(e) => vm.setName(e.target.value)}
-                placeholder="例如: 陸沉"
+                placeholder="例如: 蕭景琛 / 陸沉"
                 required
                 className="w-full glass-input px-3 py-2 rounded-xl text-sm"
               />
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">性別</label>
+              <label className="block text-xs text-slate-400 mb-1">性別 (gender)</label>
               <input
                 type="text"
                 value={vm.gender}
@@ -60,91 +60,124 @@ export default function NewCharacterPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">年齡</label>
+              <label className="block text-xs text-slate-400 mb-1">年齡 (age)</label>
               <input
-                type="number"
+                type="text"
                 value={vm.age}
-                onChange={(e) => vm.setAge(Number(e.target.value))}
+                onChange={(e) => vm.setAge(e.target.value)}
                 className="w-full glass-input px-3 py-2 rounded-xl text-sm"
               />
             </div>
 
             <div className="col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">職業 / 身分標籤</label>
+              <label className="block text-xs text-slate-400 mb-1">職業 / 身分地位 (occupation)</label>
               <input
                 type="text"
                 value={vm.occupation}
                 onChange={(e) => vm.setOccupation(e.target.value)}
-                placeholder="例如: 大學教授 / 企業創辦人"
+                placeholder="例如: 盛景資本控股集團執行總裁"
                 className="w-full glass-input px-3 py-2 rounded-xl text-sm"
               />
             </div>
           </div>
         </div>
 
-        {/* 性格與背景 */}
+        {/* 性格與說話風格 (7-8) */}
         <div className="glass-panel p-4 rounded-2xl space-y-3">
-          <h2 className="text-sm font-semibold text-slate-200">性格與對話特色</h2>
+          <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+            <ScrollText className="w-4 h-4 text-amber-400" />
+            性格與說話風格 (Personality & Speech Style)
+          </h2>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">性格特質 (逗號分隔)</label>
-            <input
-              type="text"
-              value={vm.traits}
-              onChange={(e) => vm.setTraits(e.target.value)}
-              placeholder="冷靜, 理性, 克制, 溫柔"
-              className="w-full glass-input px-3 py-2 rounded-xl text-sm"
+            <label className="block text-xs text-slate-400 mb-1">角色個性與價值觀 (personality)</label>
+            <textarea
+              value={vm.personality}
+              onChange={(e) => vm.setPersonality(e.target.value)}
+              placeholder="冷靜沉穩、極度理性、控制慾強、深情專一、對認定的人極度護短..."
+              rows={3}
+              className="w-full glass-input px-3 py-2 rounded-xl text-sm leading-relaxed"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">說話風格 (逗號分隔)</label>
-            <input
-              type="text"
+            <label className="block text-xs text-slate-400 mb-1">說話風格與情緒表達 (speechStyle)</label>
+            <textarea
               value={vm.speechStyle}
               onChange={(e) => vm.setSpeechStyle(e.target.value)}
-              placeholder="語氣平穩, 用字簡潔"
+              placeholder="語速平穩，字句簡潔。關心人時以實際行動或命令表達。生氣時語氣反而更加平靜壓迫..."
+              rows={3}
+              className="w-full glass-input px-3 py-2 rounded-xl text-sm leading-relaxed"
+            />
+          </div>
+        </div>
+
+        {/* 背景經歷與世界觀 (9-11) */}
+        <div className="glass-panel p-4 rounded-2xl space-y-3">
+          <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+            <BookOpen className="w-4 h-4 text-emerald-400" />
+            背景故事與場景世界觀 (Background & World)
+          </h2>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">背景故事與過往執念 (background)</label>
+            <textarea
+              value={vm.background}
+              onChange={(e) => vm.setBackground(e.target.value)}
+              placeholder="描述角色的過往歷史、豪門出身、十年前白月光不告而別的傷痛..."
+              rows={4}
+              className="w-full glass-input px-3 py-2 rounded-xl text-sm leading-relaxed"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">世界觀大環境 (worldView)</label>
+            <input
+              type="text"
+              value={vm.worldView}
+              onChange={(e) => vm.setWorldView(e.target.value)}
+              placeholder="例如: 現代都市豪門商業帝國"
               className="w-full glass-input px-3 py-2 rounded-xl text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">背景經歷描述</label>
-            <textarea
-              value={vm.experience}
-              onChange={(e) => vm.setExperience(e.target.value)}
-              placeholder="介紹角色的過往歷史與核心心理狀態..."
-              rows={2}
+            <label className="block text-xs text-slate-400 mb-1">固定場景初始環境 (fixedHeader)</label>
+            <input
+              type="text"
+              value={vm.fixedHeader}
+              onChange={(e) => vm.setFixedHeader(e.target.value)}
+              placeholder="例如: 盛景集團執行長辦公室，瀰漫冷杉香氣與都市夜景..."
               className="w-full glass-input px-3 py-2 rounded-xl text-sm"
             />
           </div>
         </div>
 
-        {/* 開場第一幕 */}
+        {/* AI 指令與登場第一幕 (12-13) */}
         <div className="glass-panel p-4 rounded-2xl space-y-3">
           <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-            <MessageSquare className="w-4 h-4 text-indigo-400" />
-            第一幕故事與登場台詞
+            <Key className="w-4 h-4 text-indigo-400" />
+            AI 指令與登場第一幕 (System Prompt & Opening)
           </h2>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">開場地點 / 場景</label>
-            <input
-              type="text"
-              value={vm.openingLocation}
-              onChange={(e) => vm.setOpeningLocation(e.target.value)}
-              placeholder="信義區私人會所"
-              className="w-full glass-input px-3 py-2 rounded-xl text-sm"
+            <label className="block text-xs text-slate-400 mb-1">角色核心規則 (systemPrompt)</label>
+            <textarea
+              value={vm.systemPrompt}
+              onChange={(e) => vm.setSystemPrompt(e.target.value)}
+              placeholder="你是蕭景琛，商業狼王...請嚴格遵守設定，禁止跳脫角色。"
+              rows={3}
+              className="w-full glass-input px-3 py-2 rounded-xl text-sm font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">登場台詞與心理行動</label>
+            <label className="block text-xs text-slate-400 mb-1">登場台詞與開場第一幕 (openingScene)</label>
             <textarea
-              value={vm.firstMessage}
-              onChange={(e) => vm.setFirstMessage(e.target.value)}
-              placeholder="(他沉默看著你。)\n\n「你來了。」"
-              rows={3}
+              value={vm.openingScene}
+              onChange={(e) => vm.setOpeningScene(e.target.value)}
+              placeholder="信義區私人會所內...『小孩。』『妳倒錯地方了。』"
+              rows={4}
               className="w-full glass-input px-3 py-2 rounded-xl text-sm font-mono"
             />
           </div>
@@ -161,7 +194,7 @@ export default function NewCharacterPage() {
           ) : (
             <UserPlus className="w-4 h-4" />
           )}
-          <span>{vm.isSubmitting ? "建立中..." : "確認建立角色"}</span>
+          <span>{vm.isSubmitting ? "建立中..." : "確認建立 13 維度角色"}</span>
         </button>
       </form>
     </div>

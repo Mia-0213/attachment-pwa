@@ -12,20 +12,24 @@ export class ImportCharacterUseCase {
       throw new Error("格式錯誤：非有效的 JSON 檔案");
     }
 
-    if (!parsed.name || !parsed.prompt || !parsed.openingScene) {
-      throw new Error("格式錯誤：缺少必要的角色欄位 (name, prompt, openingScene)");
+    if (!parsed.name) {
+      throw new Error("格式錯誤：缺少必要的角色名稱 (name)");
     }
 
     const importedChar: Character = {
       id: parsed.id || `char_imported_${Date.now()}`,
       name: parsed.name,
-      avatar: parsed.avatar || "",
-      basic: parsed.basic || { age: 25, gender: "未知", occupation: "角色" },
-      personality: parsed.personality || { traits: ["特別"], speechStyle: ["優雅"] },
-      background: parsed.background || { experience: "無特別記載" },
-      world: parsed.world || { era: "現代", location: "都市" },
-      openingScene: parsed.openingScene,
-      prompt: parsed.prompt,
+      avatar: parsed.avatar || "avatar_default",
+      age: String(parsed.age || "25"),
+      gender: parsed.gender || "未知",
+      occupation: parsed.occupation || "角色",
+      personality: typeof parsed.personality === "string" ? parsed.personality : JSON.stringify(parsed.personality),
+      speechStyle: typeof parsed.speechStyle === "string" ? parsed.speechStyle : JSON.stringify(parsed.speechStyle),
+      background: typeof parsed.background === "string" ? parsed.background : JSON.stringify(parsed.background),
+      worldView: typeof parsed.worldView === "string" ? parsed.worldView : JSON.stringify(parsed.worldView),
+      fixedHeader: parsed.fixedHeader || "預設場景",
+      systemPrompt: parsed.systemPrompt || "請扮演該角色，保持角色一致性。",
+      openingScene: typeof parsed.openingScene === "string" ? parsed.openingScene : parsed.openingScene?.firstMessage || "你來了。",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

@@ -205,7 +205,6 @@ export function useChatViewModel(storyId: string) {
   const regenerate = async () => {
     if (isStreaming || messages.length === 0) return;
 
-    // 取得最後一條助手的訊息
     const lastMsg = messages[messages.length - 1];
     let targetHistory = [...messages];
 
@@ -224,12 +223,11 @@ export function useChatViewModel(storyId: string) {
     const lastMsg = messages[messages.length - 1];
     if (lastMsg.role !== "assistant") return;
 
-    // 透過附加上續寫 Request 繼續生成
     const continuePromptMsg: Message = {
       id: `msg_continue_${Date.now()}`,
       storyId: story!.id,
       role: "user",
-      content: "(請繼續接續上一段回應未完的對話與行動)",
+      content: "(請繼續接續上一段回應未完的對話、肢體細節與行動)",
       status: "completed",
       createdAt: Date.now(),
     };
@@ -295,7 +293,6 @@ export function useChatViewModel(storyId: string) {
     const msgIndex = messages.findIndex((m) => m.id === editingMessageId);
     if (msgIndex === -1) return;
 
-    // 刪除此訊息之後的所有訊息（包含對應的舊 AI 回應）
     const messagesToDelete = messages.slice(msgIndex);
     for (const m of messagesToDelete) {
       await messageRepo.delete(m.id);
@@ -324,17 +321,22 @@ export function useChatViewModel(storyId: string) {
   const restartStory = async (): Promise<string | null> => {
     if (!character || !story) return null;
 
-    // 建立新的獨立 Story 實體
+    const openingText = typeof character.openingScene === "string"
+      ? character.openingScene
+      : (character.openingScene as any)?.firstMessage || "你來了。";
+
+    const locationText = character.fixedHeader || "私人會所";
+
     const newStory: Story = {
       id: `story_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       characterId: character.id,
       title: `${character.name} 的新故事`,
       summary: "",
       worldState: {
-        location: character.openingScene.location,
+        location: locationText,
         time: "晚上",
         weather: "晴朗",
-        situation: character.openingScene.description,
+        situation: "故事重啟初相遇",
         relationship: "初識",
       },
       createdAt: Date.now(),
@@ -343,12 +345,11 @@ export function useChatViewModel(storyId: string) {
 
     await storyRepo.save(newStory);
 
-    // 建立第一條對話
     await messageRepo.save({
       id: `msg_${Date.now()}`,
       storyId: newStory.id,
       role: "assistant",
-      content: character.openingScene.firstMessage,
+      content: openingText,
       status: "completed",
       createdAt: Date.now(),
     });

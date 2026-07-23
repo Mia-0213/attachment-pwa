@@ -45,16 +45,22 @@ export function useHomeViewModel() {
   }, []);
 
   const createStoryForCharacter = async (character: Character): Promise<string> => {
+    const openingText = typeof character.openingScene === "string" 
+      ? character.openingScene 
+      : (character.openingScene as any)?.firstMessage || "你來了。";
+
+    const locationText = character.fixedHeader || "私人會所";
+
     const newStory: Story = {
       id: `story_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       characterId: character.id,
       title: `${character.name} 的對話`,
       summary: "",
       worldState: {
-        location: character.openingScene.location,
+        location: locationText,
         time: "晚上",
         weather: "晴朗",
-        situation: character.openingScene.description,
+        situation: "初次相遇與對話中",
         relationship: "初識",
       },
       createdAt: Date.now(),
@@ -68,7 +74,7 @@ export function useHomeViewModel() {
       id: `msg_${Date.now()}`,
       storyId: newStory.id,
       role: "assistant",
-      content: character.openingScene.firstMessage,
+      content: openingText,
       status: "completed",
       createdAt: Date.now(),
     });

@@ -184,7 +184,7 @@ export default function HomePage() {
                           {char.name}
                         </h3>
                         <p className="text-xs text-slate-400">
-                          {char.basic.occupation || "AI Roleplay Character"}
+                          {char.occupation || "AI Roleplay Character"}
                         </p>
                       </div>
                     </div>
@@ -198,19 +198,21 @@ export default function HomePage() {
                   </div>
 
                   <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80">
-                    {char.background.experience || char.openingScene.description}
+                    {char.background || char.openingScene}
                   </p>
 
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex flex-wrap gap-1">
-                      {char.personality.traits.slice(0, 3).map((trait, idx) => (
-                        <span
-                          key={idx}
-                          className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400"
-                        >
-                          {trait}
-                        </span>
-                      ))}
+                      {typeof char.personality === "string"
+                        ? char.personality.split("、").slice(0, 3).map((trait: string, idx: number) => (
+                            <span
+                              key={idx}
+                              className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400"
+                            >
+                              {trait}
+                            </span>
+                          ))
+                        : null}
                     </div>
                     <button
                       onClick={() => handleStartChat(char.id)}
