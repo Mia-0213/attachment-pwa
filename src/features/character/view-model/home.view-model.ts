@@ -18,7 +18,7 @@ export function useHomeViewModel() {
   const initData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 自動同步最完整的 13 維度「蕭景琛」官方設定至本機資料庫
+      // 始終強制更新最新 13 維度「蕭景琛」官方設定至本機資料庫
       const defaultChar: Character = {
         ...(defaultCharacterData as unknown as Character),
         createdAt: Date.now(),
@@ -44,7 +44,10 @@ export function useHomeViewModel() {
       ? character.openingScene 
       : (character.openingScene as any)?.firstMessage || "你來了。";
 
-    const locationText = character.fixedHeader || "信義區奢華私人會所";
+    // 優先精準採用開場地點（如：信義區奢華私人會所）
+    const locationText = character.openingScene.includes("私人會所")
+      ? "信義區最奢華的私人會所"
+      : character.fixedHeader || "對話場所";
 
     const newStory: Story = {
       id: `story_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -55,7 +58,7 @@ export function useHomeViewModel() {
         location: locationText,
         time: "晚上",
         weather: "晴朗",
-        situation: "初次相遇與對話中",
+        situation: "會所初次相遇",
         relationship: "初識",
       },
       createdAt: Date.now(),
