@@ -9,9 +9,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "請先至【設定】頁面輸入有效的 API Key" } }, { status: 400 });
     }
 
-    // 解析多組 API Key（支援每行一組或逗號分隔）
+    // 解析多組 API Key（支援每行一組、逗號或空白分隔）
     const keys = String(apiKey)
-      .split(/[\n,]+/)
+      .split(/[\n,\s]+/)
       .map((k) => k.trim())
       .filter(Boolean);
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     let lastErrorText = "";
     let lastStatus = 500;
 
-    // 🔄 多 Key 自動無感輪播機制 (Auto Key Rotation)
+    // 🔄 多 Key 自動輪播與 429 冷卻自動切換重試機制
     for (let i = 0; i < keys.length; i++) {
       const currentKey = keys[i];
       let endpoint = "https://api.openai.com/v1/chat/completions";
@@ -52,36 +52,50 @@ export async function POST(req: NextRequest) {
         headers["X-Title"] = "Attachment PWA";
       }
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: targetModel,
-          messages: payloadMessages,
-          temperature: temperature ?? 0.9,
-          stream: true,
-        }),
-      });
-
-      if (response.ok && response.body) {
-        // 連線成功！傳回串流給瀏覽器
-        return new Response(response.body, {
-          headers: {
-            "Content-Type": "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-cache, no-transform",
-            Connection: "keep-alive",
-          },
+      for (let retry = 0; retry < 2; retry++) {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: targetModel,
+            messages: payloadMessages,
+            temperature: temperature ?? 0.9,
+            stream: true,
+          }),
         });
-      }
 
-      // 如果遇到限流、額度用盡或錯誤，自動嘗試下一組 Key
-      lastStatus = response.status;
-      lastErrorText = await response.text();
-      console.warn(`[AutoKeyRotation] Key #${i + 1} 連線失敗 (${response.status}): ${lastErrorText}。嘗試下一組 Key...`);
+        if (response.ok && response.body) {
+          // 連線成功！傳回串流給瀏覽器
+          return new Response(response.body, {
+            headers: {
+              "Content-Type": "text/event-stream; charset=utf-8",
+              "Cache-Control": "no-cache, no-transform",
+              Connection: "keep-alive",
+            },
+          });
+        }
+
+        lastStatus = response.status;
+        lastErrorText = await response.text();
+
+        // 若遇 429 且還有下一組 Key，立即無感切換至下一組 Key
+        if (response.status === 429 && i < keys.length - 1) {
+          console.warn(`[AutoKeyRotation] Key #${i + 1} 觸發頻率限制 (429)。自動切換至 Key #${i + 2}...`);
+          break;
+        }
+
+        // 若無下一組 Key 且遇 429，自動在背景冷卻 3 秒重試
+        if (response.status === 429 && retry === 0) {
+          console.warn(`[AutoRetry] 觸發頻率限制 (429)，自動冷卻 3 秒後重試...`);
+          await new Promise((res) => setTimeout(res, 3000));
+        } else {
+          break;
+        }
+      }
     }
 
     return NextResponse.json(
-      { error: { message: `所有 API Key 均連線失敗 (${lastStatus}): ${lastErrorText}` } },
+      { error: { message: `API 連線頻率限制或額度上限 (${lastStatus})。請稍微等待 10~20 秒重試，或確認兩組 Key 是否來自不同的 Google 帳號。` } },
       { status: lastStatus }
     );
   } catch (err: any) {
