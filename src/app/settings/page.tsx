@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSettingsViewModel } from "@/features/settings/view-model/settings.view-model";
 import { ExportBackupUseCase } from "@/features/settings/use-cases/export-backup.use-case";
 import { ImportBackupUseCase } from "@/features/settings/use-cases/import-backup.use-case";
-import { ArrowLeft, Save, ShieldCheck, Key, Cpu, Sparkles, Download, Upload, Database } from "lucide-react";
+import { ArrowLeft, Save, ShieldCheck, Key, Cpu, Sparkles, Download, Upload, Database, RefreshCw, ExternalLink } from "lucide-react";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -52,11 +52,20 @@ export default function SettingsPage() {
               </label>
               <select
                 value={settings.provider}
-                onChange={(e) => updateField("provider", e.target.value)}
+                onChange={(e) => {
+                  const newProvider = e.target.value as any;
+                  updateField("provider", newProvider);
+                  if (newProvider === "gemini" && !settings.model) {
+                    updateField("model", "gemini-2.0-flash");
+                  } else if (newProvider === "openrouter" && !settings.model) {
+                    updateField("model", "google/gemini-2.0-flash-exp:free");
+                  }
+                }}
                 className="w-full glass-input px-3 py-2 rounded-xl text-sm bg-slate-900 text-slate-100 border border-slate-700"
               >
-                <option value="openai">OpenAI</option>
-                <option value="openrouter">OpenRouter</option>
+                <option value="gemini">Google Gemini (官方免費 1,500次/天) ⭐ 推薦</option>
+                <option value="openrouter">OpenRouter (支援多款免費模型)</option>
+                <option value="openai">OpenAI (官方 API)</option>
               </select>
             </div>
 
@@ -68,30 +77,47 @@ export default function SettingsPage() {
                 type="text"
                 value={settings.model}
                 onChange={(e) => updateField("model", e.target.value)}
-                placeholder="例如: gpt-4o-mini 或 anthropic/claude-3.5-sonnet"
-                className="w-full glass-input px-3 py-2 rounded-xl text-sm"
+                placeholder={
+                  settings.provider === "gemini"
+                    ? "例如: gemini-2.0-flash 或 gemini-1.5-flash"
+                    : "例如: gpt-4o-mini 或 google/gemini-2.0-flash-exp:free"
+                }
+                className="w-full glass-input px-3 py-2 rounded-xl text-sm font-mono"
               />
             </div>
           </div>
         </div>
 
-        {/* API Key 輸入 */}
+        {/* API Key 輸入 (支援多 Key 自動輪播) */}
         <div className="glass-panel p-4 rounded-2xl space-y-3">
-          <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-            <Key className="w-4 h-4 text-amber-400" />
-            API 金鑰配置
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+              <Key className="w-4 h-4 text-amber-400" />
+              API 金鑰配置（支援多 Key 自動輪播）
+            </h2>
+            {settings.provider === "gemini" && (
+              <a
+                href="https://aistudio.google.com/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-indigo-400 hover:underline flex items-center gap-1"
+              >
+                取得免費 Key <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-400 leading-relaxed">
+            可填入一至多組 API Key（每行一組）。當第一組 Key 達到當日免費上限時，系統將**100% 自動無感切換至下一組 Key**，實現無限續航！
+          </p>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1 font-medium">
-              {settings.provider.toUpperCase()} API Key
-            </label>
-            <input
-              type="password"
+            <textarea
               value={settings.apiKey}
               onChange={(e) => updateField("apiKey", e.target.value)}
-              placeholder="sk-..."
-              className="w-full glass-input px-3 py-2 rounded-xl text-sm font-mono"
+              placeholder={`貼入一或多組 Key，例如：\nAIzaSyA...\nAIzaSyB...\nAIzaSyC...`}
+              rows={4}
+              className="w-full glass-input px-3 py-2 rounded-xl text-xs font-mono leading-relaxed"
             />
           </div>
         </div>
