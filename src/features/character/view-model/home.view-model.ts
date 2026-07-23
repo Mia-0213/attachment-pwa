@@ -14,24 +14,19 @@ export function useHomeViewModel() {
 
   const characterRepo = new CharacterRepository();
   const storyRepo = new StoryRepository();
-  const messageRepo = new MessageRepository();
 
   const initData = useCallback(async () => {
     setIsLoading(true);
     try {
-      let charList = await characterRepo.list();
+      // 自動同步最完整的 13 維度「蕭景琛」官方設定至本機資料庫
+      const defaultChar: Character = {
+        ...(defaultCharacterData as unknown as Character),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await characterRepo.save(defaultChar);
 
-      // 若資料庫無角色，自動載入預設角色「蕭景琛」
-      if (charList.length === 0) {
-        const defaultChar: Character = {
-          ...(defaultCharacterData as unknown as Character),
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        await characterRepo.save(defaultChar);
-        charList = [defaultChar];
-      }
-
+      const charList = await characterRepo.list();
       setCharacters(charList);
 
       const stories = await storyRepo.list();
@@ -49,7 +44,7 @@ export function useHomeViewModel() {
       ? character.openingScene 
       : (character.openingScene as any)?.firstMessage || "你來了。";
 
-    const locationText = character.fixedHeader || "私人會所";
+    const locationText = character.fixedHeader || "信義區奢華私人會所";
 
     const newStory: Story = {
       id: `story_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -70,6 +65,7 @@ export function useHomeViewModel() {
     await storyRepo.save(newStory);
 
     // 建立第一條對話（Opening Scene）
+    const messageRepo = new MessageRepository();
     await messageRepo.save({
       id: `msg_${Date.now()}`,
       storyId: newStory.id,
