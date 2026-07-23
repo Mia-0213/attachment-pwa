@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { useHomeViewModel } from "@/features/character/view-model/home.view-model";
 import { ExportCharacterUseCase } from "@/features/character/use-cases/export-character.use-case";
 import { ImportCharacterUseCase } from "@/features/character/use-cases/import-character.use-case";
-import { Sparkles, MessageSquare, Plus, Settings, User, Brain, Download, Upload, UserPlus } from "lucide-react";
+import { Sparkles, MessageSquare, Plus, Settings, User, Brain, Download, Upload, UserPlus, Trash2 } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
-  const { characters, recentStories, isLoading, createStoryForCharacter } =
+  const { characters, recentStories, isLoading, createStoryForCharacter, deleteStory } =
     useHomeViewModel();
 
   const handleStartChat = async (characterId: string) => {
@@ -119,6 +119,18 @@ export default function HomePage() {
                         >
                           <Brain className="w-3.5 h-3.5" />
                           記憶
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`確定要刪除與【${char?.name || "此角色"}】的這筆對話紀錄嗎？`)) {
+                              deleteStory(story.id);
+                            }
+                          }}
+                          className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 text-xs flex items-center gap-1 border border-slate-700 transition-colors"
+                          title="刪除此對話紀錄"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>

@@ -2,66 +2,45 @@ import { AIProvider, AIRequest } from "@/core/ai/types/ai-provider.interface";
 
 export class OpenAIAdapter implements AIProvider {
   public async generate(request: AIRequest): Promise<string> {
-    if (!request.apiKey) {
-      throw new Error("請輸入 OpenAI API Key");
-    }
-
-    const messages = [];
-    if (request.systemPrompt) {
-      messages.push({ role: "system", content: request.systemPrompt });
-    }
-    messages.push(...request.messages.map((m) => ({ role: m.role, content: m.content })));
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("/api/chat/stream", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${request.apiKey}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        provider: "openai",
+        messages: request.messages,
         model: request.model || "gpt-4o-mini",
-        messages,
-        temperature: request.temperature ?? 0.7,
+        apiKey: request.apiKey,
+        systemPrompt: request.systemPrompt,
+        temperature: request.temperature ?? 0.95,
       }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `OpenAI API 錯誤: ${response.status}`);
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `API 失敗 (${response.status})`);
     }
 
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || "";
+    const text = await response.text();
+    return text;
   }
 
   public async *stream(request: AIRequest): AsyncIterable<string> {
-    if (!request.apiKey) {
-      throw new Error("請輸入 OpenAI API Key");
-    }
-
-    const messages = [];
-    if (request.systemPrompt) {
-      messages.push({ role: "system", content: request.systemPrompt });
-    }
-    messages.push(...request.messages.map((m) => ({ role: m.role, content: m.content })));
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("/api/chat/stream", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${request.apiKey}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        provider: "openai",
+        messages: request.messages,
         model: request.model || "gpt-4o-mini",
-        messages,
-        temperature: request.temperature ?? 0.7,
-        stream: true,
+        apiKey: request.apiKey,
+        systemPrompt: request.systemPrompt,
+        temperature: request.temperature ?? 0.95,
       }),
     });
 
     if (!response.ok || !response.body) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `OpenAI Stream 錯誤: ${response.status}`);
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `連線失敗 (${response.status})`);
     }
 
     const reader = response.body.getReader();
@@ -88,7 +67,7 @@ export class OpenAIAdapter implements AIProvider {
               yield delta;
             }
           } catch {
-            // 忽略 JSON 解析異常行
+            // 忽略非 JSON 行
           }
         }
       }

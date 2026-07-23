@@ -4,6 +4,7 @@ import { Story } from "@/features/story/types/story.type";
 import { CharacterRepository } from "@/core/repository/character.repository";
 import { StoryRepository } from "@/core/repository/story.repository";
 import { MessageRepository } from "@/core/repository/message.repository";
+import { DeleteStoryUseCase } from "@/features/story/use-cases/delete-story.use-case";
 import defaultCharacterData from "@/features/character/data/xiaojingchen.json";
 
 export function useHomeViewModel() {
@@ -75,6 +76,16 @@ export function useHomeViewModel() {
     return newStory.id;
   };
 
+  const deleteStory = async (storyId: string) => {
+    try {
+      const deleteUseCase = new DeleteStoryUseCase();
+      await deleteUseCase.execute(storyId);
+      setRecentStories((prev) => prev.filter((s) => s.id !== storyId));
+    } catch (err) {
+      console.error("刪除故事失敗:", err);
+    }
+  };
+
   useEffect(() => {
     initData();
   }, [initData]);
@@ -84,6 +95,7 @@ export function useHomeViewModel() {
     recentStories,
     isLoading,
     createStoryForCharacter,
+    deleteStory,
     refresh: initData,
   };
 }
