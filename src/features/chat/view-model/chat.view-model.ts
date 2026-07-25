@@ -48,7 +48,11 @@ export function useChatViewModel(storyId: string) {
       if (charData) setCharacter(charData);
 
       const msgList = await messageRepo.getByStoryId(storyId);
-      setMessages(msgList);
+      // 自動清理歷史對話中的錯誤提示文字卡條，保護故事對話紀錄乾淨
+      const cleanList = msgList.filter(
+        (m) => !m.content.includes("[系統錯誤:") && !m.content.includes("429")
+      );
+      setMessages(cleanList);
 
       const memList = await memoryRepo.getByStoryId(storyId);
       setMemories(memList);
@@ -84,7 +88,7 @@ export function useChatViewModel(storyId: string) {
     await triggerAIResponse([...messages, userMsg]);
   };
 
-  // 觸發 AI 回覆
+  // 觸發 AI 回覆（包含用戶端自動重試與氣泡保護機制）
   const triggerAIResponse = async (currentMessages: Message[]) => {
     if (!story || !character) return;
 
@@ -109,38 +113,58 @@ export function useChatViewModel(storyId: string) {
 
     setMessages((prev) => [...prev, initialAssistantMsg]);
 
-    try {
-      const filteredMemories = contextEngine.filterMemories(memories);
-      const systemPrompt = promptEngine.buildSystemPrompt({
-        character,
-        story,
-        memories: filteredMemories,
-      });
+    const filteredMemories = contextEngine.filterMemories(memories);
+    const systemPrompt = promptEngine.buildSystemPrompt({
+      character,
+      story,
+      memories: filteredMemories,
+    });
+    const recentMessages = contextEngine.filterRecentMessages(currentMessages);
 
-      const recentMessages = contextEngine.filterRecentMessages(currentMessages);
+    let success = false;
+    let accumulatedContent = "";
 
-      const stream = aiEngine.stream(settings.provider || "openai", {
-        messages: recentMessages,
-        model: settings.model || "gpt-4o-mini",
-        apiKey: settings.apiKey,
-        systemPrompt,
-      });
+    // 🔄 用戶端最多自動重試 2 次 (靜默處理 429 情況)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (abortControllerRef.current) break;
 
-      let accumulatedContent = "";
+      try {
+        const stream = aiEngine.stream(settings.provider || "openai", {
+          messages: recentMessages,
+          model: settings.model || "gpt-4o-mini",
+          apiKey: settings.apiKey,
+          systemPrompt,
+        });
 
-      for await (const chunk of stream) {
-        if (abortControllerRef.current) break;
-        accumulatedContent += chunk;
+        accumulatedContent = "";
 
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? { ...msg, content: accumulatedContent }
-              : msg
-          )
-        );
+        for await (const chunk of stream) {
+          if (abortControllerRef.current) break;
+          accumulatedContent += chunk;
+
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? { ...msg, content: accumulatedContent }
+                : msg
+            )
+          );
+        }
+
+        if (accumulatedContent.trim()) {
+          success = true;
+          break; // 生成成功！
+        }
+      } catch (err: any) {
+        console.warn(`[ClientRetry] 第 ${attempt + 1} 次連線嘗試失敗: ${err.message}`);
+        if (attempt === 0) {
+          // 等待 2.5 秒靜默重試
+          await new Promise((res) => setTimeout(res, 2500));
+        }
       }
+    }
 
+    if (success && accumulatedContent.trim()) {
       const finalMsg: Message = {
         id: assistantMsgId,
         storyId: story.id,
@@ -152,7 +176,7 @@ export function useChatViewModel(storyId: string) {
 
       await messageRepo.save(finalMsg);
 
-      // 非同步自動觸發記憶提取 (Memory Extractor)
+      // 非同步記憶與摘要更新
       const extractUseCase = new ExtractMemoryUseCase();
       extractUseCase.execute(story.id, [...currentMessages, finalMsg]).then((newMems) => {
         if (newMems.length > 0) {
@@ -160,7 +184,6 @@ export function useChatViewModel(storyId: string) {
         }
       });
 
-      // 非同步自動更新故事動態摘要與時間線事件 (Story Summary & Timeline Engine)
       const summaryEngine = new StorySummaryEngine();
       summaryEngine.updateSummary(story, [...currentMessages, finalMsg]).then(async (result) => {
         if (result) {
@@ -181,18 +204,12 @@ export function useChatViewModel(storyId: string) {
           }
         }
       });
-    } catch (err: any) {
-      console.error("AI 串流生成失敗:", err);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId
-            ? { ...msg, content: msg.content + `\n[系統錯誤: ${err?.message || "無法連線"}]`, status: "error" }
-            : msg
-        )
-      );
-    } finally {
-      setIsStreaming(false);
+    } else {
+      // 失敗時刪除空訊息氣泡，保護對話記錄乾淨不污染
+      setMessages((prev) => prev.filter((msg) => msg.id !== assistantMsgId));
     }
+
+    setIsStreaming(false);
   };
 
   // 停止生成
@@ -220,148 +237,123 @@ export function useChatViewModel(storyId: string) {
   // 繼續生成 (Continue)
   const continueGeneration = async () => {
     if (isStreaming || messages.length === 0) return;
+
     const lastMsg = messages[messages.length - 1];
     if (lastMsg.role !== "assistant") return;
 
-    const continuePromptMsg: Message = {
-      id: `msg_continue_${Date.now()}`,
+    const promptForContinue: Message = {
+      id: `msg_${Date.now()}_user`,
       storyId: story!.id,
       role: "user",
-      content: "(請繼續接續上一段回應未完的對話、肢體細節與行動)",
+      content: "(請繼續生成劇情內容...)",
       status: "completed",
       createdAt: Date.now(),
     };
 
-    setIsStreaming(true);
-    try {
-      const settings = await settingsRepo.get();
-      if (!settings || !settings.apiKey) return;
-
-      const filteredMemories = contextEngine.filterMemories(memories);
-      const systemPrompt = promptEngine.buildSystemPrompt({
-        character: character!,
-        story: story!,
-        memories: filteredMemories,
-      });
-
-      const recentMessages = contextEngine.filterRecentMessages([...messages, continuePromptMsg]);
-
-      const stream = aiEngine.stream(settings.provider || "openai", {
-        messages: recentMessages,
-        model: settings.model || "gpt-4o-mini",
-        apiKey: settings.apiKey,
-        systemPrompt,
-      });
-
-      let addedContent = "";
-      for await (const chunk of stream) {
-        if (abortControllerRef.current) break;
-        addedContent += chunk;
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === lastMsg.id
-              ? { ...msg, content: msg.content + chunk }
-              : msg
-          )
-        );
-      }
-
-      const updatedMsg: Message = {
-        ...lastMsg,
-        content: lastMsg.content + addedContent,
-        status: "completed",
-      };
-      await messageRepo.save(updatedMsg);
-    } catch (err) {
-      console.error("繼續生成失敗:", err);
-    } finally {
-      setIsStreaming(false);
-    }
+    await triggerAIResponse([...messages, promptForContinue]);
   };
 
-  // 編輯玩家訊息 (Edit User Message)
-  const startEditMessage = (msg: Message) => {
-    if (msg.role !== "user") return;
-    setEditingMessageId(msg.id);
-    setEditContent(msg.content);
+  // 編輯訊息 (Start Edit)
+  const startEditMessage = (messageId: string, currentContent: string) => {
+    setEditingMessageId(messageId);
+    setEditContent(currentContent);
   };
 
-  const confirmEditMessage = async () => {
-    if (!editingMessageId || !story) return;
+  // 確認編輯 (Confirm Edit)
+  const confirmEditMessage = async (messageId: string) => {
+    if (!editContent.trim()) return;
 
-    const msgIndex = messages.findIndex((m) => m.id === editingMessageId);
-    if (msgIndex === -1) return;
+    const targetMsg = messages.find((m) => m.id === messageId);
+    if (!targetMsg) return;
 
-    const messagesToDelete = messages.slice(msgIndex);
-    for (const m of messagesToDelete) {
-      await messageRepo.delete(m.id);
-    }
-
-    const updatedUserMsg: Message = {
-      id: editingMessageId,
-      storyId: story.id,
-      role: "user",
+    const updatedMsg: Message = {
+      ...targetMsg,
       content: editContent.trim(),
-      status: "completed",
-      createdAt: Date.now(),
     };
 
-    await messageRepo.save(updatedUserMsg);
+    await messageRepo.save(updatedMsg);
 
-    const newHistory = [...messages.slice(0, msgIndex), updatedUserMsg];
-    setMessages(newHistory);
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === messageId ? updatedMsg : msg))
+    );
+
     setEditingMessageId(null);
     setEditContent("");
 
-    await triggerAIResponse(newHistory);
+    // 若編輯的是 user 訊息，自動重新生成後續回覆
+    if (targetMsg.role === "user") {
+      const msgIndex = messages.findIndex((m) => m.id === messageId);
+      if (msgIndex !== -1) {
+        const slicedHistory = messages.slice(0, msgIndex);
+        const newHistory = [...slicedHistory, updatedMsg];
+
+        // 刪除該訊息之後的所有訊息
+        const futureMsgs = messages.slice(msgIndex + 1);
+        for (const fMsg of futureMsgs) {
+          await messageRepo.delete(fMsg.id);
+        }
+
+        setMessages(newHistory);
+        await triggerAIResponse(newHistory);
+      }
+    }
   };
 
-  // 重啟新劇情 (Restart Story)
+  // 重啟劇情 (Restart Story)
   const restartStory = async (): Promise<string | null> => {
-    if (!character || !story) return null;
+    if (!story || !character) return null;
 
-    const openingText = typeof character.openingScene === "string"
-      ? character.openingScene
-      : (character.openingScene as any)?.firstMessage || "你來了。";
+    // 刪除當前故事的所有訊息
+    await messageRepo.deleteByStoryId(story.id);
 
-    const locationText = character.fixedHeader || "私人會所";
+    // 重新載入角色最新 13 維度設定
+    const charData = await characterRepo.getById(story.characterId);
+    const activeChar = charData || character;
 
-    const newStory: Story = {
-      id: `story_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      characterId: character.id,
-      title: `${character.name} 的新故事`,
+    const openingText =
+      typeof activeChar.openingScene === "string"
+        ? activeChar.openingScene
+        : (activeChar.openingScene as any)?.firstMessage || "你來了。";
+
+    // 更新故事地點與關係
+    const updatedStory: Story = {
+      ...story,
       summary: "",
       worldState: {
-        location: locationText,
-        time: "晚上",
+        location: activeChar.openingScene.includes("私人會所")
+          ? "信義區最奢華的私人會所"
+          : activeChar.fixedHeader || "對話場所",
+        time: "夜晚",
         weather: "晴朗",
-        situation: "故事重啟初相遇",
+        situation: "會所初次相遇",
         relationship: "初識",
       },
-      createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    await storyRepo.save(newStory);
+    await storyRepo.save(updatedStory);
 
-    await messageRepo.save({
-      id: `msg_${Date.now()}`,
-      storyId: newStory.id,
+    // 寫入首條開場訊息
+    const firstMsg: Message = {
+      id: `msg_${Date.now()}_opening`,
+      storyId: story.id,
       role: "assistant",
       content: openingText,
       status: "completed",
       createdAt: Date.now(),
-    });
+    };
 
-    return newStory.id;
+    await messageRepo.save(firstMsg);
+    setMessages([firstMsg]);
+    setStory(updatedStory);
+
+    return story.id;
   };
 
   return {
     story,
     character,
     messages,
-    memories,
     inputContent,
     setInputContent,
     isStreaming,

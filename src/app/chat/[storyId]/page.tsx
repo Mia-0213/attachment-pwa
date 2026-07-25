@@ -172,7 +172,7 @@ export default function ChatPage() {
                         取消
                       </button>
                       <button
-                        onClick={confirmEditMessage}
+                        onClick={() => confirmEditMessage(msg.id)}
                         className="px-3 py-1 text-xs bg-indigo-500 text-white rounded-md flex items-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
@@ -185,7 +185,7 @@ export default function ChatPage() {
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                     {!isStreaming && (
                       <button
-                        onClick={() => startEditMessage(msg)}
+                        onClick={() => startEditMessage(msg.id, msg.content)}
                         className="opacity-60 hover:opacity-100 p-1 text-slate-200 transition-opacity"
                         title="編輯訊息"
                       >

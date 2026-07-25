@@ -28,14 +28,25 @@ export async function POST(req: NextRequest) {
     let lastErrorText = "";
     let lastStatus = 500;
 
-    // 定義 Gemini 模型自動降級切換鏈 (2.0-flash -> 1.5-flash -> 2.0-flash-lite)
+    // 模型降級備援清單
     const geminiModels = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+    const openRouterModels = [
+      model || "google/gemini-2.0-flash-exp:free",
+      "qwen/qwen-2.5-72b-instruct:free",
+      "meta-llama/llama-3.1-8b-instruct:free",
+      "google/gemma-2-9b-it:free",
+    ];
 
-    // 🔄 多 Key 輪播與多模型降級備援機制 (Key Rotation + Model Fallback)
+    // 🔄 多階層終極備援連線引擎 (Multi-Tier Self-Healing Engine)
     for (let i = 0; i < keys.length; i++) {
       const currentKey = keys[i];
 
-      const modelsToTry = provider === "gemini" ? geminiModels : [model || "gpt-4o-mini"];
+      let modelsToTry = [model || "gpt-4o-mini"];
+      if (provider === "gemini") {
+        modelsToTry = geminiModels;
+      } else if (provider === "openrouter") {
+        modelsToTry = openRouterModels;
+      }
 
       for (const currentModel of modelsToTry) {
         let endpoint = "https://api.openai.com/v1/chat/completions";
@@ -82,19 +93,14 @@ export async function POST(req: NextRequest) {
 
         lastStatus = response.status;
         lastErrorText = await response.text();
-
-        // 若遇到 429 (Resource Exhausted)，嘗試下一個模型或下一組 Key
-        if (response.status === 429) {
-          console.warn(`[AutoFallback] 模型 ${currentModel} 觸發 429 限流。嘗試自動備援切換...`);
-          continue; // 嘗試列表中的下一個模型
-        }
+        console.warn(`[MultiTierFallback] Key #${i + 1} 服務商 ${provider} 模型 ${currentModel} 回應 ${response.status}: ${lastErrorText}。嘗試切換下一個模型/Key...`);
       }
     }
 
     return NextResponse.json(
       {
         error: {
-          message: `Google Gemini 免費額度暫時冷卻中 (429)。系統已為您嘗試所有備援 Key 與模型。請等待約 20~30 秒，或至【設定】將服務商切換為 OpenRouter。`,
+          message: `目前所有模型連線忙碌中 (${lastStatus})。請確認在【設定】貼入的 API Key 是否正確，或直接在對話框輸入新訊息重新發送。`,
         },
       },
       { status: lastStatus }
