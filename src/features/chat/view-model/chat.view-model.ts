@@ -48,11 +48,7 @@ export function useChatViewModel(storyId: string) {
       if (charData) setCharacter(charData);
 
       const msgList = await messageRepo.getByStoryId(storyId);
-      // 自動清理歷史對話中的錯誤提示文字卡條，保護故事對話紀錄乾淨
-      const cleanList = msgList.filter(
-        (m) => !m.content.includes("[系統錯誤:") && !m.content.includes("429")
-      );
-      setMessages(cleanList);
+      setMessages(msgList);
 
       const memList = await memoryRepo.getByStoryId(storyId);
       setMemories(memList);
@@ -88,7 +84,7 @@ export function useChatViewModel(storyId: string) {
     await triggerAIResponse([...messages, userMsg]);
   };
 
-  // 觸發 AI 回覆（包含用戶端自動重試與氣泡保護機制）
+  // 觸發 AI 回覆
   const triggerAIResponse = async (currentMessages: Message[]) => {
     if (!story || !character) return;
 
@@ -123,15 +119,16 @@ export function useChatViewModel(storyId: string) {
 
     let success = false;
     let accumulatedContent = "";
+    let lastErrorMessage = "";
 
-    // 🔄 用戶端最多自動重試 2 次 (靜默處理 429 情況)
+    // 🔄 用戶端最多自動重試 2 次
     for (let attempt = 0; attempt < 2; attempt++) {
       if (abortControllerRef.current) break;
 
       try {
-        const stream = aiEngine.stream(settings.provider || "openai", {
+        const stream = aiEngine.stream(settings.provider || "openrouter", {
           messages: recentMessages,
-          model: settings.model || "gpt-4o-mini",
+          model: settings.model || "google/gemini-2.0-flash-exp:free",
           apiKey: settings.apiKey,
           systemPrompt,
         });
@@ -156,10 +153,10 @@ export function useChatViewModel(storyId: string) {
           break; // 生成成功！
         }
       } catch (err: any) {
-        console.warn(`[ClientRetry] 第 ${attempt + 1} 次連線嘗試失敗: ${err.message}`);
+        lastErrorMessage = err?.message || "連線失敗";
+        console.warn(`[ClientRetry] 第 ${attempt + 1} 次連線嘗試失敗: ${lastErrorMessage}`);
         if (attempt === 0) {
-          // 等待 2.5 秒靜默重試
-          await new Promise((res) => setTimeout(res, 2500));
+          await new Promise((res) => setTimeout(res, 2000));
         }
       }
     }
@@ -204,9 +201,15 @@ export function useChatViewModel(storyId: string) {
           }
         }
       });
-    } else {
-      // 失敗時刪除空訊息氣泡，保護對話記錄乾淨不污染
-      setMessages((prev) => prev.filter((msg) => msg.id !== assistantMsgId));
+    } else if (!abortControllerRef.current) {
+      const noticeText = `[連線失敗: ${lastErrorMessage}。請檢查【設定】中的 API Key 與模型名稱是否正確，或點擊「重新生成」]`;
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? { ...msg, content: noticeText, status: "error" }
+            : msg
+        )
+      );
     }
 
     setIsStreaming(false);

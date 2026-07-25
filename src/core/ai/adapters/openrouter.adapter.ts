@@ -8,7 +8,7 @@ export class OpenRouterAdapter implements AIProvider {
       body: JSON.stringify({
         provider: "openrouter",
         messages: request.messages,
-        model: request.model || "openai/gpt-4o-mini",
+        model: request.model || "google/gemini-2.0-flash-exp:free",
         apiKey: request.apiKey,
         systemPrompt: request.systemPrompt,
         temperature: request.temperature ?? 0.95,
@@ -31,7 +31,7 @@ export class OpenRouterAdapter implements AIProvider {
       body: JSON.stringify({
         provider: "openrouter",
         messages: request.messages,
-        model: request.model || "openai/gpt-4o-mini",
+        model: request.model || "google/gemini-2.0-flash-exp:free",
         apiKey: request.apiKey,
         systemPrompt: request.systemPrompt,
         temperature: request.temperature ?? 0.95,
@@ -62,7 +62,10 @@ export class OpenRouterAdapter implements AIProvider {
           if (dataStr === "[DONE]") return;
           try {
             const parsed = JSON.parse(dataStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
+            const delta =
+              parsed.choices?.[0]?.delta?.content ||
+              parsed.choices?.[0]?.text ||
+              parsed.choices?.[0]?.message?.content;
             if (delta) {
               yield delta;
             }
