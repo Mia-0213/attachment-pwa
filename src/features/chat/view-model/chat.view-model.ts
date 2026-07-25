@@ -48,7 +48,24 @@ export function useChatViewModel(storyId: string) {
       if (charData) setCharacter(charData);
 
       const msgList = await messageRepo.getByStoryId(storyId);
-      setMessages(msgList);
+
+      // 自動從本機 IndexedDB 永久物理刪除過期的殘留錯誤卡條訊息
+      const cleanList: Message[] = [];
+      for (const m of msgList) {
+        const isError =
+          m.content.includes("gemma-2-9b-it") ||
+          m.content.includes("No endpoints found") ||
+          m.content.includes("[系統錯誤:") ||
+          m.content.includes("[連線失敗:");
+
+        if (isError) {
+          // 永久從本機資料庫刪除
+          await messageRepo.delete(m.id);
+        } else {
+          cleanList.push(m);
+        }
+      }
+      setMessages(cleanList);
 
       const memList = await memoryRepo.getByStoryId(storyId);
       setMemories(memList);
@@ -128,7 +145,7 @@ export function useChatViewModel(storyId: string) {
       try {
         const stream = aiEngine.stream(settings.provider || "openrouter", {
           messages: recentMessages,
-          model: settings.model || "google/gemini-2.0-flash-exp:free",
+          model: settings.model || "meta-llama/llama-3.3-70b-instruct:free",
           apiKey: settings.apiKey,
           systemPrompt,
         });
