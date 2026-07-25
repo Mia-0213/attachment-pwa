@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "請先至【設定】頁面輸入有效的 API Key" } }, { status: 400 });
     }
 
-    // 清除可能複製到的引號與空白，並解析多組 Key
+    // 清除可能複製到的引號與不可見字元
     const keys = String(apiKey)
       .replace(/["']/g, "")
       .split(/[\n,\s]+/)
@@ -29,11 +29,11 @@ export async function POST(req: NextRequest) {
     let lastErrorText = "";
     let lastStatus = 500;
 
-    // 🔄 多 Key 輪播與智慧 Key 類型自動辨識與路由引擎
+    // 🔄 多 Key 輪播與智慧 Provider 自動比對路由引擎
     for (let i = 0; i < keys.length; i++) {
       const currentKey = keys[i];
 
-      // 🧠 自動智慧識別 Key 種類
+      // 🧠 自動識別 Key 類別
       let detectedProvider = provider || "openrouter";
       if (currentKey.startsWith("AQ.") || currentKey.startsWith("AIzaSy")) {
         detectedProvider = "gemini";
@@ -43,18 +43,24 @@ export async function POST(req: NextRequest) {
         detectedProvider = "openai";
       }
 
-      // 根據辨識出來的真實服務商，定義對應的最佳備援模型鏈
-      let modelsToTry = [model || "gpt-4o-mini"];
+      // 建立對應服務商的模型優先嘗試隊列
+      const requestedModel = model && model.trim() ? model.trim() : null;
+      let modelsToTry: string[] = [];
+
       if (detectedProvider === "gemini") {
-        modelsToTry = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+        modelsToTry = Array.from(new Set([requestedModel || "gemini-2.0-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]));
       } else if (detectedProvider === "openrouter") {
-        modelsToTry = [
-          model || "meta-llama/llama-3.3-70b-instruct:free",
-          "meta-llama/llama-3.3-70b-instruct:free",
-          "qwen/qwen-2.5-72b-instruct:free",
-          "deepseek/deepseek-r1:free",
-          "google/gemma-2-9b-it:free",
-        ];
+        modelsToTry = Array.from(
+          new Set([
+            requestedModel || "meta-llama/llama-3.3-70b-instruct:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "deepseek/deepseek-r1:free",
+            "google/gemma-2-9b-it:free",
+          ])
+        );
+      } else {
+        modelsToTry = [requestedModel || "gpt-4o-mini"];
       }
 
       for (const currentModel of modelsToTry) {
@@ -90,7 +96,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (response.ok && response.body) {
-          // 連線成功！傳回串流給瀏覽器
+          // 成功連線串流發送
           return new Response(response.body, {
             headers: {
               "Content-Type": "text/event-stream; charset=utf-8",
@@ -101,17 +107,27 @@ export async function POST(req: NextRequest) {
         }
 
         lastStatus = response.status;
-        lastErrorText = await response.text();
+        const errRaw = await response.text();
+        try {
+          const parsedErr = JSON.parse(errRaw);
+          lastErrorText = parsedErr.error?.message || errRaw;
+        } catch {
+          lastErrorText = errRaw;
+        }
 
-        console.warn(`[SmartAutoDetect] 識別為 ${detectedProvider} Key #${i + 1} 模型 ${currentModel} 回應 ${response.status}: ${lastErrorText}。嘗試切換下一模型...`);
-        continue;
+        console.warn(`[ProxyError] 服務商 ${detectedProvider} Key #${i + 1} 模型 ${currentModel} 連線回應 ${response.status}: ${lastErrorText}`);
+
+        // 如果是 401 (Invalid Key) 或 402 (Insufficient Credits)，不要嘗試別的模型，直接換下一個 Key 或回傳
+        if (response.status === 401 || response.status === 402) {
+          break;
+        }
       }
     }
 
     return NextResponse.json(
       {
         error: {
-          message: `OpenRouter 連線失敗 (${lastStatus})。請確認在 OpenRouter 後台生成的 Key 是否仍有權限，或點擊 Create Key 重新生成一組。`,
+          message: `API 連線失敗 (${lastStatus}): ${lastErrorText || "請檢查 API Key 是否正確且具備額度。"}`,
         },
       },
       { status: lastStatus }
