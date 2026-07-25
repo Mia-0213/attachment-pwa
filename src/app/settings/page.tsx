@@ -55,16 +55,16 @@ export default function SettingsPage() {
                 onChange={(e) => {
                   const newProvider = e.target.value as any;
                   updateField("provider", newProvider);
-                  if (newProvider === "gemini" && !settings.model) {
+                  if (newProvider === "openrouter") {
+                    updateField("model", "meta-llama/llama-3.3-70b-instruct:free");
+                  } else if (newProvider === "gemini") {
                     updateField("model", "gemini-2.0-flash");
-                  } else if (newProvider === "openrouter" && !settings.model) {
-                    updateField("model", "google/gemini-2.0-flash-exp:free");
                   }
                 }}
                 className="w-full glass-input px-3 py-2 rounded-xl text-sm bg-slate-900 text-slate-100 border border-slate-700"
               >
-                <option value="gemini">Google Gemini (官方免費 1,500次/天) ⭐ 推薦</option>
-                <option value="openrouter">OpenRouter (支援多款免費模型)</option>
+                <option value="openrouter">OpenRouter (多款免費大模型) ⭐ 推薦</option>
+                <option value="gemini">Google Gemini (官方免費 1,500次/天)</option>
                 <option value="openai">OpenAI (官方 API)</option>
               </select>
             </div>
@@ -77,11 +77,7 @@ export default function SettingsPage() {
                 type="text"
                 value={settings.model}
                 onChange={(e) => updateField("model", e.target.value)}
-                placeholder={
-                  settings.provider === "gemini"
-                    ? "例如: gemini-2.0-flash 或 gemini-1.5-flash"
-                    : "例如: gpt-4o-mini 或 google/gemini-2.0-flash-exp:free"
-                }
+                placeholder="例如: meta-llama/llama-3.3-70b-instruct:free 或 qwen/qwen-2.5-72b-instruct:free"
                 className="w-full glass-input px-3 py-2 rounded-xl text-sm font-mono"
               />
             </div>
@@ -93,11 +89,11 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
               <Key className="w-4 h-4 text-amber-400" />
-              API 金鑰配置（支援多 Key 自動輪播）
+              API 金鑰配置
             </h2>
-            {settings.provider === "gemini" && (
+            {settings.provider === "openrouter" && (
               <a
-                href="https://aistudio.google.com/"
+                href="https://openrouter.ai/keys"
                 target="_blank"
                 rel="noreferrer"
                 className="text-[11px] text-indigo-400 hover:underline flex items-center gap-1"
@@ -108,14 +104,14 @@ export default function SettingsPage() {
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed">
-            可填入一至多組 API Key（每行一組）。當第一組 Key 達到當日免費上限時，系統將**100% 自動無感切換至下一組 Key**，實現無限續航！
+            可填入一至多組 API Key（每行一組）。當連線遇錯或限流時，系統將**100% 自動無感切換至下組 Key/模型**，實現無限續航！
           </p>
 
           <div>
             <textarea
               value={settings.apiKey}
               onChange={(e) => updateField("apiKey", e.target.value)}
-              placeholder={`貼入一或多組 Key，例如：\nAIzaSyA...\nAIzaSyB...\nAIzaSyC...`}
+              placeholder={`貼入一或多組 Key，例如：\nsk-or-v1-...\nsk-or-v1-...`}
               rows={4}
               className="w-full glass-input px-3 py-2 rounded-xl text-xs font-mono leading-relaxed"
             />
@@ -180,7 +176,7 @@ export default function SettingsPage() {
           ) : (
             <Save className="w-4 h-4" />
           )}
-          <span>{isSaving ? "儲存中..." : "儲存設定"}</span>
+          <span>{isSaving ? "儲存設定" : "儲存設定"}</span>
         </button>
 
         {saveSuccess && (

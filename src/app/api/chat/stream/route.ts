@@ -28,16 +28,19 @@ export async function POST(req: NextRequest) {
     let lastErrorText = "";
     let lastStatus = 500;
 
-    // 模型降級備援清單
-    const geminiModels = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+    // 定義 OpenRouter 100% 可用之熱門免費模型備援鏈
     const openRouterModels = [
-      model || "google/gemini-2.0-flash-exp:free",
+      model || "meta-llama/llama-3.3-70b-instruct:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
       "qwen/qwen-2.5-72b-instruct:free",
-      "meta-llama/llama-3.1-8b-instruct:free",
+      "deepseek/deepseek-r1:free",
+      "google/gemini-2.0-flash-lite-preview-02-05:free",
       "google/gemma-2-9b-it:free",
     ];
 
-    // 🔄 多階層終極備援連線引擎 (Multi-Tier Self-Healing Engine)
+    const geminiModels = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+
+    // 🔄 多 Key 輪播與多模型降級備援機制 (Key Rotation + Model Fallback)
     for (let i = 0; i < keys.length; i++) {
       const currentKey = keys[i];
 
@@ -93,14 +96,17 @@ export async function POST(req: NextRequest) {
 
         lastStatus = response.status;
         lastErrorText = await response.text();
-        console.warn(`[MultiTierFallback] Key #${i + 1} 服務商 ${provider} 模型 ${currentModel} 回應 ${response.status}: ${lastErrorText}。嘗試切換下一個模型/Key...`);
+
+        console.warn(`[AutoFallback] 服務商 ${provider} 模型 ${currentModel} 回應 ${response.status}: ${lastErrorText}。嘗試下一個備援模型...`);
+        // 遇到 404 (Model Not Found) 或 429，自動嘗試下一個備援模型
+        continue;
       }
     }
 
     return NextResponse.json(
       {
         error: {
-          message: `目前所有模型連線忙碌中 (${lastStatus})。請確認在【設定】貼入的 API Key 是否正確，或直接在對話框輸入新訊息重新發送。`,
+          message: `OpenRouter 提示 (${lastStatus}): 模型名稱無效或 API Key 未授權。請確認【設定】頁面中的 API Key 是否正確。`,
         },
       },
       { status: lastStatus }
