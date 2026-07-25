@@ -9,8 +9,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "請先至【設定】頁面輸入有效的 API Key" } }, { status: 400 });
     }
 
-    // 解析多組 API Key（支援每行一組、逗號或空白分隔）
+    // 清除可能複製到的引號與空白，並解析多組 Key
     const keys = String(apiKey)
+      .replace(/["']/g, "")
       .split(/[\n,\s]+/)
       .map((k) => k.trim())
       .filter(Boolean);
@@ -28,35 +29,40 @@ export async function POST(req: NextRequest) {
     let lastErrorText = "";
     let lastStatus = 500;
 
-    // 定義 OpenRouter 100% 可用之熱門免費模型備援鏈
-    const openRouterModels = [
-      model || "meta-llama/llama-3.3-70b-instruct:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "qwen/qwen-2.5-72b-instruct:free",
-      "deepseek/deepseek-r1:free",
-      "google/gemini-2.0-flash-lite-preview-02-05:free",
-      "google/gemma-2-9b-it:free",
-    ];
-
-    const geminiModels = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
-
-    // 🔄 多 Key 輪播與多模型降級備援機制 (Key Rotation + Model Fallback)
+    // 🔄 多 Key 輪播與智慧 Key 類型自動辨識與路由引擎
     for (let i = 0; i < keys.length; i++) {
       const currentKey = keys[i];
 
+      // 🧠 自動智慧識別 Key 種類
+      let detectedProvider = provider || "openrouter";
+      if (currentKey.startsWith("AQ.") || currentKey.startsWith("AIzaSy")) {
+        detectedProvider = "gemini";
+      } else if (currentKey.startsWith("sk-or-v1")) {
+        detectedProvider = "openrouter";
+      } else if (currentKey.startsWith("sk-") && !currentKey.startsWith("sk-or-v1")) {
+        detectedProvider = "openai";
+      }
+
+      // 根據辨識出來的真實服務商，定義對應的最佳備援模型鏈
       let modelsToTry = [model || "gpt-4o-mini"];
-      if (provider === "gemini") {
-        modelsToTry = geminiModels;
-      } else if (provider === "openrouter") {
-        modelsToTry = openRouterModels;
+      if (detectedProvider === "gemini") {
+        modelsToTry = [model || "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+      } else if (detectedProvider === "openrouter") {
+        modelsToTry = [
+          model || "meta-llama/llama-3.3-70b-instruct:free",
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "qwen/qwen-2.5-72b-instruct:free",
+          "deepseek/deepseek-r1:free",
+          "google/gemma-2-9b-it:free",
+        ];
       }
 
       for (const currentModel of modelsToTry) {
         let endpoint = "https://api.openai.com/v1/chat/completions";
 
-        if (provider === "gemini") {
+        if (detectedProvider === "gemini") {
           endpoint = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${encodeURIComponent(currentKey)}`;
-        } else if (provider === "openrouter") {
+        } else if (detectedProvider === "openrouter") {
           endpoint = "https://openrouter.ai/api/v1/chat/completions";
         }
 
@@ -65,9 +71,9 @@ export async function POST(req: NextRequest) {
           Authorization: `Bearer ${currentKey}`,
         };
 
-        if (provider === "gemini") {
+        if (detectedProvider === "gemini") {
           headers["x-goog-api-key"] = currentKey;
-        } else if (provider === "openrouter") {
+        } else if (detectedProvider === "openrouter") {
           headers["HTTP-Referer"] = "https://attachment-pwa.vercel.app";
           headers["X-Title"] = "Attachment PWA";
         }
@@ -97,8 +103,7 @@ export async function POST(req: NextRequest) {
         lastStatus = response.status;
         lastErrorText = await response.text();
 
-        console.warn(`[AutoFallback] 服務商 ${provider} 模型 ${currentModel} 回應 ${response.status}: ${lastErrorText}。嘗試下一個備援模型...`);
-        // 遇到 404 (Model Not Found) 或 429，自動嘗試下一個備援模型
+        console.warn(`[SmartAutoDetect] 識別為 ${detectedProvider} Key #${i + 1} 模型 ${currentModel} 回應 ${response.status}: ${lastErrorText}。嘗試切換下一模型...`);
         continue;
       }
     }
@@ -106,7 +111,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `OpenRouter 提示 (${lastStatus}): 模型名稱無效或 API Key 未授權。請確認【設定】頁面中的 API Key 是否正確。`,
+          message: `OpenRouter 連線失敗 (${lastStatus})。請確認在 OpenRouter 後台生成的 Key 是否仍有權限，或點擊 Create Key 重新生成一組。`,
         },
       },
       { status: lastStatus }
