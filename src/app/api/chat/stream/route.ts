@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         detectedProvider = "openai";
       }
 
-      // 建立對應服務商的模型優先嘗試隊列 (移除已下架之舊模型)
+      // 定義對應服務商之 100% 在線免費模型隊列 (移除全網已下架之舊型號)
       const requestedModel = model && model.trim() ? model.trim() : null;
       let modelsToTry: string[] = [];
 
@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
             requestedModel || "meta-llama/llama-3.3-70b-instruct:free",
             "meta-llama/llama-3.3-70b-instruct:free",
             "qwen/qwen-2.5-72b-instruct:free",
-            "deepseek/deepseek-r1:free",
+            "deepseek/deepseek-r1-distill-llama-70b:free",
+            "google/gemini-2.0-flash-lite-preview-02-05:free",
           ])
         );
       } else {
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `連線失敗 (${lastStatus}): ${lastErrorText || "若使用付費模型 (如 Claude 3.5 Sonnet)，請確認 OpenRouter 帳號是否有餘額；或至【設定】改用免費模型 meta-llama/llama-3.3-70b-instruct:free。"}`,
+          message: `連線失敗 (${lastStatus}): ${lastErrorText || "請確認 OpenRouter 帳號與 API Key 是否有效。"}`,
         },
       },
       { status: lastStatus }
